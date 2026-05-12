@@ -1,0 +1,23 @@
+# Local secrets
+.env
+
+# Python environment and cache
+.venv/
+__pycache__/
+*.pyc
+
+# Generated audio and local recordings
+generated_audio/
+recordings/
+samples/
+*.mp3
+*.wav
+# Local backup and test output files
+*.bak
+*.schema-backup
+translation-test.json
+
+# Local backup and test output files
+*.bak
+*.schema-backup
+translation-test.json

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AmharicVoice AI</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">Azure-powered Amharic ↔ English AI</p>
+        <h1>AmharicVoice AI</h1>
+        <p class="hero-text">
+          Translate Amharic and English text or speech using Azure Speech, Azure Translator,
+          and an Amharic-aware phrase normalization layer.
+        </p>
+      </div>
+
+      <div class="status-card">
+        <span class="status-dot"></span>
+        <div>
+          <strong>Local MVP</strong>
+          <p>Backend API expected at <code>127.0.0.1:8000</code></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Text Translation</h2>
+          <p>Translate typed Amharic or English text.</p>
+        </div>
+
+        <label for="text-direction">Direction</label>
+        <select id="text-direction">
+          <option value="am-en">Amharic → English</option>
+          <option value="en-am">English → Amharic</option>
+        </select>
+
+        <label for="text-input">Text</label>
+        <textarea id="text-input" rows="6" placeholder="Type text here...">ሰላም እንዴት ነው?</textarea>
+
+        <div class="button-row">
+          <button id="sample-amharic" type="button">Use Amharic sample</button>
+          <button id="sample-english" type="button">Use English sample</button>
+        </div>
+
+        <button id="translate-text-btn" class="primary-btn" type="button">
+          Translate Text
+        </button>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Speech Translation</h2>
+          <p>Upload a WAV file and receive transcript, translation, and spoken output.</p>
+        </div>
+
+        <label for="speech-direction">Direction</label>
+        <select id="speech-direction">
+          <option value="am-en">Amharic audio → English</option>
+          <option value="en-am">English audio → Amharic</option>
+        </select>
+
+        <label for="audio-file">WAV audio file</label>
+        <input id="audio-file" type="file" accept=".wav,audio/wav" />
+
+        <label class="checkbox-row">
+          <input id="speak-output" type="checkbox" checked />
+          Generate translated audio
+        </label>
+
+        <button id="translate-speech-btn" class="primary-btn" type="button">
+          Translate Speech
+        </button>
+
+        <p class="hint">
+          Use <code>backend/samples/amharic_hello.wav</code> or
+          <code>backend/samples/english_hello.wav</code> for testing.
+        </p>
+      </section>
+    </section>
+
+    <section class="results">
+      <div class="panel result-panel">
+        <div class="panel-header">
+          <h2>Result</h2>
+          <p>The latest API response will appear here.</p>
+        </div>
+
+        <div id="error-box" class="error-box hidden"></div>
+
+        <div class="result-grid">
+          <div>
+            <h3>Original / Transcript</h3>
+            <p id="original-output" class="result-text muted">No result yet.</p>
+          </div>
+
+          <div>
+            <h3>Translation</h3>
+            <p id="translation-output" class="result-text muted">No result yet.</p>
+          </div>
+
+          <div>
+            <h3>Normalization</h3>
+            <p id="normalization-output" class="result-text muted">No normalization result yet.</p>
+          </div>
+
+          <div>
+            <h3>Audio</h3>
+            <audio id="audio-player" controls class="hidden"></audio>
+            <p id="audio-note" class="result-text muted">No audio generated yet.</p>
+          </div>
+        </div>
+
+        <details class="raw-json">
+          <summary>Raw JSON response</summary>
+          <pre id="raw-output">{}</pre>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
