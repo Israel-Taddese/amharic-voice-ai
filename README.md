@@ -423,9 +423,9 @@ This project demonstrates:
 - [x] Add `.env.example`
 - [x] Ignore generated audio, WAV samples, backup files, and test output
 - [x] Review and merge Dependabot dependency update
-- [ ] Add rate limiting
-- [ ] Add upload file size limits
-- [ ] Add generated audio cleanup
+- [x] Add rate limiting
+- [x] Add upload file size limits
+- [x] Add generated audio cleanup
 - [ ] Restrict production CORS settings
 - [ ] Add privacy/security checklist
 
