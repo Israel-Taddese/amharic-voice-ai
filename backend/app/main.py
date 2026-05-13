@@ -24,6 +24,9 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 AUDIO_OUTPUT_DIR = BASE_DIR / "generated_audio"
 AUDIO_OUTPUT_DIR.mkdir(exist_ok=True)
 
+MAX_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024
+MAX_UPLOAD_SIZE_MB = MAX_UPLOAD_SIZE_BYTES // (1024 * 1024)
+
 openapi_tags = [
     {
         "name": "System",
@@ -175,8 +178,16 @@ async def speech_translate(
     suffix = os.path.splitext(audio.filename)[1] or ".wav"
 
     try:
+        audio_bytes = await audio.read()
+
+        if len(audio_bytes) > MAX_UPLOAD_SIZE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Uploaded audio file is too large. Maximum allowed size is {MAX_UPLOAD_SIZE_MB} MB.",
+            )
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            tmp.write(await audio.read())
+            tmp.write(audio_bytes)
             tmp_path = tmp.name
 
         transcript = recognize_speech_from_wav(tmp_path, locale=route["speech_locale"])
@@ -207,6 +218,9 @@ async def speech_translate(
             audio_url=audio_url,
             audio_mime_type=audio_mime_type,
         )
+
+    except HTTPException:
+        raise
 
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
