@@ -3,7 +3,7 @@ import tempfile
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -16,6 +16,7 @@ from .models import (
     TranslationDirection,
 )
 from .normalizer import normalize_before_translation
+from .rate_limiter import InMemoryRateLimiter
 from .speech import recognize_speech_from_wav, synthesize_speech_mp3
 from .translator import translate_text
 
@@ -54,6 +55,13 @@ app.add_middleware(
 )
 
 app.mount("/audio", StaticFiles(directory=str(AUDIO_OUTPUT_DIR)), name="audio")
+
+rate_limiter = InMemoryRateLimiter(max_requests=20, window_seconds=60)
+
+
+@app.middleware("http")
+async def rate_limit_requests(request: Request, call_next):
+    return await rate_limiter(request, call_next)
 
 LANGUAGE_ROUTES = {
     "am-en": {
