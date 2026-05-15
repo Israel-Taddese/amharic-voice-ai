@@ -18,7 +18,10 @@ class Settings:
     app_env: str = os.getenv("APP_ENV", "development")
     allowed_origins: tuple[str, ...] = tuple(
         origin.strip()
-        for origin in os.getenv("ALLOWED_ORIGINS", "*").split(",")
+        for origin in os.getenv(
+            "ALLOWED_ORIGINS",
+            "http://127.0.0.1:5500,http://localhost:5500",
+        ).split(",")
         if origin.strip()
     )
 
@@ -34,6 +37,12 @@ class Settings:
             missing.append("AZURE_TRANSLATOR_REGION")
         if missing:
             raise RuntimeError(f"Missing required environment variables: {', '.join(missing)}")
+
+        if self.app_env.lower() == "production" and "*" in self.allowed_origins:
+            raise RuntimeError(
+                "ALLOWED_ORIGINS cannot include '*' when APP_ENV=production. "
+                "Set explicit HTTPS frontend origins instead."
+            )
 
 
 settings = Settings()
