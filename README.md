@@ -492,8 +492,8 @@ This project demonstrates:
 - [x] Choose deployment platform
 - [x] Configure production environment variables
 - [x] Deploy backend with HTTPS
-- [ ] Test deployed API
-- [ ] Add public demo instructions
+- [x] Test deployed API
+- [x] Add public demo instructions
 
 ### Phase 5, Mobile/Web App
 
