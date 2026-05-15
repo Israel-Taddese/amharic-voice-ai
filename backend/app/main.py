@@ -1,5 +1,6 @@
 import os
 import tempfile
+import time
 import uuid
 from pathlib import Path
 
@@ -27,6 +28,7 @@ AUDIO_OUTPUT_DIR.mkdir(exist_ok=True)
 MAX_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024
 MAX_UPLOAD_SIZE_MB = MAX_UPLOAD_SIZE_BYTES // (1024 * 1024)
 UPLOAD_READ_CHUNK_SIZE_BYTES = 1024 * 1024
+GENERATED_AUDIO_RETENTION_SECONDS = 60 * 60
 
 openapi_tags = [
     {
@@ -108,10 +110,33 @@ def translate_with_normalization(text: str, route: dict[str, str]) -> tuple[str,
     return translated, normalization
 
 
+def cleanup_generated_audio(max_age_seconds: int = GENERATED_AUDIO_RETENTION_SECONDS) -> int:
+    """
+    Delete generated MP3 files older than the configured retention window.
+    """
+    now = time.time()
+    deleted_count = 0
+
+    for audio_file in AUDIO_OUTPUT_DIR.glob("translation_*.mp3"):
+        try:
+            file_age_seconds = now - audio_file.stat().st_mtime
+
+            if file_age_seconds > max_age_seconds:
+                audio_file.unlink()
+                deleted_count += 1
+
+        except OSError:
+            continue
+
+    return deleted_count
+
+
 def save_audio_file(audio_bytes: bytes) -> str:
     """
     Save generated MP3 bytes and return a frontend-friendly audio URL.
     """
+    cleanup_generated_audio()
+
     filename = f"translation_{uuid.uuid4().hex}.mp3"
     output_path = AUDIO_OUTPUT_DIR / filename
     output_path.write_bytes(audio_bytes)
