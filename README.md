@@ -28,6 +28,14 @@ The project currently supports:
 - Local browser-based web UI
 - FastAPI Swagger/OpenAPI testing through `/docs`
 - GitHub documentation and demo screenshot
+- Basic API rate limiting for local MVP protection
+- Speech upload size limits with chunked file reading
+
+Current audio upload limitation:
+
+- The speech endpoint expects real WAV/PCM audio.
+- Renaming a compressed file such as `.m4a` to `.wav` does not make it a valid WAV file.
+- The final MVP goal is to record directly into an Azure-compatible WAV/PCM format so users do not need to manually convert recordings.
 
 ---
 
@@ -79,6 +87,27 @@ User uploads Amharic or English WAV audio
 → Backend generates translated speech with Azure Text-to-Speech
 → Backend returns transcript, translation, normalization details, and audio URL
 ```
+
+### Supported Audio Format
+
+For the current MVP, uploaded speech audio should be a real WAV/PCM file.
+
+Recommended recording format:
+
+```text
+WAV
+PCM
+16-bit
+Mono
+16 kHz sample rate
+
+
+User clicks Record
+→ Browser or mobile app captures microphone audio
+→ App encodes the recording as 16 kHz mono 16-bit PCM WAV
+→ App uploads the WAV file directly to the speech translation endpoint
+→ User receives transcript, translation, and translated speech output
+
 
 ### Amharic Phrase Normalization
 
@@ -305,7 +334,7 @@ Example request body for English to Amharic:
 
 ## Test Speech Translation
 
-Use generated test audio files or upload your own WAV files.
+Use generated test audio files or upload your own valid WAV/PCM files.
 
 Example values in `/docs`:
 
@@ -325,6 +354,16 @@ The response should include:
 - Audio MIME type
 
 ---
+
+### Audio Upload Troubleshooting
+
+If a speech upload fails with an invalid audio header error, check that the uploaded file is a real WAV/PCM file. A file recorded as `.m4a` and renamed to `.wav` will still fail because the internal audio encoding did not change.
+
+Use the generated sample files first to confirm the backend is working:
+
+```text
+backend/samples/english_hello.wav
+backend/samples/amharic_hello.wav
 
 ## Generated Test Audio
 
@@ -425,7 +464,9 @@ This project demonstrates:
 - [x] Review and merge Dependabot dependency update
 - [x] Add rate limiting
 - [x] Add upload file size limits
-- [x] Add generated audio cleanup
+- [x] Improve upload size validation with chunked reads
+- [ ] Add clear invalid WAV error handling
+- [ ] Add generated audio cleanup
 - [ ] Restrict production CORS settings
 - [ ] Add privacy/security checklist
 
@@ -440,7 +481,9 @@ This project demonstrates:
 ### Phase 5, Mobile/Web App
 
 - [ ] Build frontend/mobile prototype
-- [ ] Add microphone recording
+- [ ] Add browser microphone recording
+- [ ] Encode browser recordings as 16 kHz mono 16-bit PCM WAV
+- [ ] Upload recorded WAV directly to the speech translation endpoint
 - [ ] Add translated audio playback
 - [ ] Prepare demo video
 - [ ] Explore iOS app packaging
