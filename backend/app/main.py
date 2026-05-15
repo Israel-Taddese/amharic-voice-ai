@@ -1,4 +1,4 @@
-﻿import os
+import os
 import tempfile
 import uuid
 from pathlib import Path
@@ -228,7 +228,22 @@ async def speech_translate(
         raise
 
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        error_message = str(exc)
+
+        if (
+            "SPXERR_INVALID_HEADER" in error_message
+            or "INVALID_HEADER" in error_message
+            or "invalid header" in error_message.lower()
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Invalid WAV audio. Please upload a real PCM WAV file, "
+                    "not a renamed .m4a, .mp3, or compressed audio file."
+                ),
+            ) from exc
+
+        raise HTTPException(status_code=500, detail=error_message) from exc
 
     finally:
         try:
