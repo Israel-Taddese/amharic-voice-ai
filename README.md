@@ -31,6 +31,23 @@ The project currently supports:
 - Basic API rate limiting for local MVP protection
 - Speech upload size limits with chunked file reading
 
+## Public Demo
+
+The AmharicVoice AI MVP is deployed on Render.
+
+- Frontend demo: `https://amharic-voice-ai-web.onrender.com`
+- Backend health endpoint: `https://amharic-voice-ai.onrender.com/health`
+- Backend API docs: `https://amharic-voice-ai.onrender.com/docs`
+
+### Demo Notes
+
+- Text translation can be tested directly in the frontend demo.
+- Speech translation requires a valid WAV/PCM audio file.
+- Renamed `.m4a`, `.mp3`, or compressed audio files are not valid WAV files and will be rejected.
+- The backend is hosted on Render’s free tier, so the first request after inactivity may take about a minute while the service wakes up.
+- Azure API keys are stored as Render environment variables and are not committed to GitHub.
+- The deployed frontend calls the deployed backend API over HTTPS.
+
 Current audio upload limitation:
 
 - The speech endpoint expects real WAV/PCM audio.
