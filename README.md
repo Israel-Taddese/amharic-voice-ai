@@ -472,9 +472,9 @@ This project demonstrates:
 
 ### Phase 4, Deployment
 
-- [ ] Choose deployment platform
-- [ ] Configure production environment variables
-- [ ] Deploy backend with HTTPS
+- [x] Choose deployment platform
+- [x] Configure production environment variables
+- [x] Deploy backend with HTTPS
 - [ ] Test deployed API
 - [ ] Add public demo instructions
 
