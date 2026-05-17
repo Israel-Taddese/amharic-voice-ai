@@ -83,6 +83,25 @@ def normalize_before_translation(
                     translation_override="Hello. How are you?"
                 )
 
+        # Speech recognition can return greeting words in a different order,
+        # for example: "እንዴት ነው ሰላም ነው?"
+        greeting_markers = [
+            "እንዴት ነው",
+            "እንዴት ነህ",
+            "እንዴት ነሽ",
+            "እንዴት ነዎት",
+            "እንዴት ናችሁ",
+        ]
+
+        if "ሰላም" in compact and any(marker in compact for marker in greeting_markers):
+            return NormalizationResult(
+                original_text=original,
+                normalized_text="ሰላም። እንዴት ነው?",
+                was_normalized=True,
+                note="Recognized an Amharic greeting phrase even though speech recognition returned the words in a different order.",
+                translation_override="Hello. How are you?"
+            )
+
     # English greeting patterns
     if source_language == "en" and target_language == "am":
         compact = _clean_english_for_matching(original)
