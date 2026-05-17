@@ -1,5 +1,79 @@
 # AmharicVoice AI
 
+<!-- PORTFOLIO-README-SECTION:START -->
+
+## Portfolio Project Summary
+
+**AmharicVoice AI** is an Azure-powered Amharic ↔ English translation MVP that supports typed text translation, browser microphone recording, WAV speech translation, translated audio playback, and Amharic-aware phrase normalization.
+
+This project demonstrates full-stack application development, cloud API integration, secure backend design, deployment documentation, and practical troubleshooting across browser audio, Azure AI services, FastAPI, Render, GitHub, and Windows development environments.
+
+## Live Demo
+
+- **Frontend demo:** `https://amharic-voice-ai-web.onrender.com`
+- **Backend health check:** `https://amharic-voice-ai.onrender.com/health`
+- **Backend API docs:** `https://amharic-voice-ai.onrender.com/docs`
+
+> Note: The backend is hosted on Render's free tier, so the first request after inactivity may take extra time while the service wakes up.
+
+## Key Features
+
+- Amharic ↔ English text translation
+- Amharic ↔ English speech translation
+- Browser microphone recording
+- Browser recordings encoded as 16 kHz mono 16-bit PCM WAV
+- Direct upload of recorded WAV audio to the speech translation endpoint
+- Translated audio playback
+- Custom Amharic phrase normalization for greeting phrases and speech-recognition variations
+- Public frontend and backend deployment on Render
+- API documentation through FastAPI Swagger UI
+
+## Security and Privacy Highlights
+
+- `.env` file excluded from Git tracking
+- `.env.example` included for safe configuration reference
+- Azure keys stored as Render environment variables
+- Rate limiting added to reduce API abuse risk
+- Upload file size limits added for speech requests
+- Chunked upload validation added to avoid reading oversized uploads into memory
+- Invalid WAV error handling added for renamed `.m4a`, `.mp3`, or compressed audio files
+- Generated translated audio cleanup added
+- Production CORS restricted to the deployed frontend
+- Privacy/security checklist documented
+
+## Technical Stack
+
+**Frontend:** HTML, CSS, JavaScript, browser microphone APIs  
+**Backend:** Python, FastAPI, Uvicorn  
+**Cloud AI:** Azure Speech Services, Azure Translator  
+**Deployment:** Render Web Service, Render Static Site  
+**Security/DevOps:** GitHub, branch-based pull requests, environment variables, CORS, rate limiting, upload validation  
+**Testing:** Localhost testing, Swagger UI, browser DevTools, PowerShell, deployed API validation
+
+## Recruiter Talking Points
+
+This project is relevant to entry-level cybersecurity, GRC, IT/security support, cloud support, and AI-adjacent technical roles because it shows:
+
+- Ability to build and deploy a working cloud-connected application
+- Understanding of API security controls such as rate limiting, CORS, upload limits, and secret management
+- Practical troubleshooting across frontend, backend, cloud services, browser permissions, and deployment logs
+- Clear documentation of security decisions, testing evidence, limitations, and future improvements
+- Secure SDLC habits using GitHub branches, pull requests, roadmap updates, and test notes
+
+## Demo Video
+
+A short demo video is planned to show:
+
+1. The public Render frontend
+2. Typed Amharic ↔ English translation
+3. Browser microphone recording
+4. Speech translation result
+5. Translated audio playback
+6. Security and deployment highlights
+
+<!-- PORTFOLIO-README-SECTION:END -->
+
+
 AmharicVoice AI is an Azure-powered Amharic ↔ English speech and text translation project. It is designed to support Amharic speakers, English speakers, and Ethiopian/Eritrean communities with a practical AI translation assistant that can process text, transcribe speech, translate meaning, and generate spoken audio output.
 
 This project is being developed as a flagship portfolio project focused on cloud AI integration, backend API development, language-aware product design, and security-conscious handling of cloud credentials and generated audio.
