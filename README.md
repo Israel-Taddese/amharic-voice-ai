@@ -499,11 +499,11 @@ This project demonstrates:
 
 - [x] Build frontend/mobile prototype
 - [x] Add browser microphone recording
-- [ ] Encode browser recordings as 16 kHz mono 16-bit PCM WAV
-- [ ] Upload recorded WAV directly to the speech translation endpoint
+- [x] Encode browser recordings as 16 kHz mono 16-bit PCM WAV
+- [x] Upload recorded WAV directly to the speech translation endpoint
 - [x] Add translated audio playback
-- [ ] Prepare demo video
-- [ ] Explore iOS app packaging
+- [x] Prepare demo video
+- [x] Explore iOS app packaging
 
 ---
 

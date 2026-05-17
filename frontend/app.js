@@ -26,6 +26,7 @@ let recorderProcessor = null;
 let recordedSamples = [];
 let recordingSampleRate = 44100;
 let recordedWavBlob = null;
+const TARGET_RECORDING_SAMPLE_RATE = 16000;
 
 const errorBox = document.getElementById("error-box");
 const originalOutput = document.getElementById("original-output");
@@ -126,6 +127,30 @@ function mergeFloat32Arrays(chunks) {
   }
 
   return merged;
+}
+
+
+function resampleToSampleRate(samples, originalSampleRate, targetSampleRate) {
+  if (originalSampleRate === targetSampleRate) {
+    return samples;
+  }
+
+  const ratio = originalSampleRate / targetSampleRate;
+  const newLength = Math.round(samples.length / ratio);
+  const resampled = new Float32Array(newLength);
+
+  for (let i = 0; i < newLength; i += 1) {
+    const sourceIndex = i * ratio;
+    const indexFloor = Math.floor(sourceIndex);
+    const indexCeil = Math.min(indexFloor + 1, samples.length - 1);
+    const fraction = sourceIndex - indexFloor;
+
+    resampled[i] =
+      samples[indexFloor] * (1 - fraction) +
+      samples[indexCeil] * fraction;
+  }
+
+  return resampled;
 }
 
 function writeString(view, offset, value) {
@@ -232,14 +257,20 @@ async function stopBrowserRecording() {
       throw new Error("No audio was captured. Please try recording again.");
     }
 
-    recordedWavBlob = createWavBlob(samples, recordingSampleRate);
+    const resampledSamples = resampleToSampleRate(
+      samples,
+      recordingSampleRate,
+      TARGET_RECORDING_SAMPLE_RATE
+    );
+
+    recordedWavBlob = createWavBlob(resampledSamples, TARGET_RECORDING_SAMPLE_RATE);
     recordedAudioPlayer.src = URL.createObjectURL(recordedWavBlob);
     recordedAudioPlayer.classList.remove("hidden");
 
     startRecordingBtn.disabled = false;
     stopRecordingBtn.disabled = true;
     clearRecordingBtn.disabled = false;
-    recordingStatus.textContent = "Recording ready. Click Translate Speech to submit it.";
+    recordingStatus.textContent = "Recording ready as 16 kHz mono WAV. Click Translate Speech to submit it.";
   } catch (error) {
     showError(error.message);
     startRecordingBtn.disabled = false;
