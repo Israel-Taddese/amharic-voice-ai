@@ -6,10 +6,10 @@ struct ContentView: View {
     private let checksHealthOnAppear: Bool
 
     init(
-        viewModel: TranslationViewModel = TranslationViewModel(),
+        viewModel: TranslationViewModel? = nil,
         checksHealthOnAppear: Bool = true
     ) {
-        _viewModel = StateObject(wrappedValue: viewModel)
+        _viewModel = StateObject(wrappedValue: viewModel ?? TranslationViewModel())
         self.checksHealthOnAppear = checksHealthOnAppear
     }
 
