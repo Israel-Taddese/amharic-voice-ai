@@ -1,43 +1,137 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
-final class APIClient {
-    // Simulator can use localhost. Physical iPhone needs your Mac's LAN IP, for example http://192.168.1.20:8000
-    var baseURL = URL(string: "http://127.0.0.1:8000")!
+protocol HTTPSession {
+    func data(for request: URLRequest) async throws -> (Data, URLResponse)
+}
 
-    func translateSpeech(audioURL: URL, direction: TranslationDirection, speakOutput: Bool = true) async throws -> SpeechTranslateResponse {
-        let endpoint = baseURL.appendingPathComponent("api/speech-translate")
-        var request = URLRequest(url: endpoint)
+extension URLSession: HTTPSession {
+    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        try await data(for: request, delegate: nil)
+    }
+}
+
+protocol APIClientProtocol {
+    func health() async throws -> HealthResponse
+    func translateText(_ request: TextTranslateRequest) async throws -> TextTranslateResponse
+}
+
+enum APIClientError: LocalizedError {
+    case invalidResponse
+    case httpStatus(Int, String?)
+    case decoding(String)
+    case transport(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidResponse:
+            return "The backend returned an invalid response."
+        case let .httpStatus(statusCode, detail):
+            return detail ?? "The backend returned HTTP \(statusCode)."
+        case let .decoding(message):
+            return "The backend response could not be read: \(message)"
+        case let .transport(message):
+            return "The backend could not be reached: \(message)"
+        }
+    }
+}
+
+final class APIClient: APIClientProtocol {
+    private struct BackendErrorResponse: Decodable {
+        let detail: String
+    }
+
+    private let configuration: BackendConfiguration
+    private let session: HTTPSession
+    private let encoder: JSONEncoder
+    private let decoder: JSONDecoder
+
+    init(
+        configuration: BackendConfiguration = .current,
+        session: HTTPSession? = nil,
+        encoder: JSONEncoder = JSONEncoder(),
+        decoder: JSONDecoder = JSONDecoder()
+    ) {
+        self.configuration = configuration
+        self.session = session ?? Self.makeEphemeralSession()
+        self.encoder = encoder
+        self.decoder = decoder
+    }
+
+    func health() async throws -> HealthResponse {
+        try await execute(makeHealthRequest())
+    }
+
+    func translateText(_ request: TextTranslateRequest) async throws -> TextTranslateResponse {
+        try await execute(makeTextTranslationRequest(request))
+    }
+
+    func makeHealthRequest() -> URLRequest {
+        var request = makeRequest(path: "health")
+        request.httpMethod = "GET"
+        return request
+    }
+
+    func makeTextTranslationRequest(_ payload: TextTranslateRequest) throws -> URLRequest {
+        var request = makeRequest(path: "api/text-translate")
         request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(payload)
+        return request
+    }
 
-        let boundary = "Boundary-\(UUID().uuidString)"
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+    private func makeRequest(path: String) -> URLRequest {
+        var request = URLRequest(
+            url: configuration.endpoint(path),
+            cachePolicy: .reloadIgnoringLocalCacheData,
+            timeoutInterval: 90
+        )
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        return request
+    }
 
-        var body = Data()
-        func appendField(name: String, value: String) {
-            body.append("--\(boundary)\r\n".data(using: .utf8)!)
-            body.append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".data(using: .utf8)!)
-            body.append("\(value)\r\n".data(using: .utf8)!)
+    private func execute<Response: Decodable>(_ request: URLRequest) async throws -> Response {
+        let data: Data
+        let response: URLResponse
+
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as URLError where error.code == .cancelled {
+            throw CancellationError()
+        } catch let error as APIClientError {
+            throw error
+        } catch {
+            throw APIClientError.transport(error.localizedDescription)
         }
 
-        appendField(name: "direction", value: direction.rawValue)
-        appendField(name: "speak_output", value: speakOutput ? "true" : "false")
-
-        let audioData = try Data(contentsOf: audioURL)
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"audio\"; filename=\"recording.wav\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: audio/wav\r\n\r\n".data(using: .utf8)!)
-        body.append(audioData)
-        body.append("\r\n".data(using: .utf8)!)
-        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
-
-        request.httpBody = body
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
-            let message = String(data: data, encoding: .utf8) ?? "Unknown API error"
-            throw NSError(domain: "APIClient", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIClientError.invalidResponse
         }
 
-        return try JSONDecoder().decode(SpeechTranslateResponse.self, from: data)
+        guard 200..<300 ~= httpResponse.statusCode else {
+            let detail = try? decoder.decode(BackendErrorResponse.self, from: data).detail
+            throw APIClientError.httpStatus(httpResponse.statusCode, detail)
+        }
+
+        do {
+            return try decoder.decode(Response.self, from: data)
+        } catch {
+            throw APIClientError.decoding(error.localizedDescription)
+        }
+    }
+
+    private static func makeEphemeralSession() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.urlCache = nil
+        configuration.httpCookieStorage = nil
+        configuration.waitsForConnectivity = true
+        configuration.timeoutIntervalForRequest = 90
+        configuration.timeoutIntervalForResource = 120
+        return URLSession(configuration: configuration)
     }
 }
