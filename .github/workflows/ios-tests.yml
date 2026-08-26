@@ -1,0 +1,94 @@
+name: iOS tests
+
+on:
+  pull_request:
+    paths:
+      - "mobile-ios/**"
+      - ".github/workflows/ios-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  xctest:
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: mobile-ios
+
+      - name: Show Xcode and simulator runtimes
+        run: |
+          xcodebuild -version
+          xcrun simctl list runtimes
+
+      - name: Select an available iPhone Simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          simulator_id="$(
+            xcrun simctl list devices available --json |
+              /usr/bin/python3 -c '
+          import json
+          import re
+          import sys
+
+          payload = json.load(sys.stdin)
+          candidates = []
+
+          for runtime, devices in payload.get("devices", {}).items():
+              match = re.search(r"SimRuntime\.iOS-(\d+(?:-\d+)*)$", runtime)
+              if not match:
+                  continue
+
+              version = tuple(int(part) for part in match.group(1).split("-"))
+              if version[0] < 17:
+                  continue
+
+              for device in devices:
+                  identifier = device.get("deviceTypeIdentifier", "")
+                  name = device.get("name", "")
+                  if device.get("isAvailable") is False:
+                      continue
+                  if "iPhone" not in identifier and not name.startswith("iPhone"):
+                      continue
+                  candidates.append((version, name, device["udid"]))
+
+          if not candidates:
+              raise SystemExit("No available iPhone Simulator with iOS 17 or later was found.")
+
+          candidates.sort(key=lambda candidate: (candidate[0], candidate[1]), reverse=True)
+          version, name, udid = candidates[0]
+          version_string = ".".join(str(part) for part in version)
+          print("Selected {} on iOS {} ({})".format(name, version_string, udid), file=sys.stderr)
+          print(udid)
+          '
+          )"
+
+          if [[ -z "$simulator_id" ]]; then
+            echo "Simulator selection returned an empty device ID." >&2
+            exit 1
+          fi
+
+          echo "id=$simulator_id" >> "$GITHUB_OUTPUT"
+
+      - name: Build and run iOS unit tests
+        env:
+          SIMULATOR_ID: ${{ steps.simulator.outputs.id }}
+        run: |
+          set -euo pipefail
+
+          xcodebuild test \
+            -project mobile-ios/AmharicVoiceAI.xcodeproj \
+            -scheme AmharicVoiceAI \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+            -destination-timeout 120 \
+            -derivedDataPath "$RUNNER_TEMP/AmharicVoiceAI-DerivedData" \
+            CODE_SIGNING_ALLOWED=NO
