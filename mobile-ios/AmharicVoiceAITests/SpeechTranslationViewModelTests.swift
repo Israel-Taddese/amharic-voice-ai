@@ -158,12 +158,12 @@ final class SpeechTranslationViewModelTests: XCTestCase {
     private func makeViewModel(
         client: SpeechAPIClientProtocol = MockSpeechAPIClient(),
         recorder: MockAudioRecorder,
-        audioPlayer: AudioPlaying = MockAudioPlayer()
+        audioPlayer: AudioPlaying? = nil
     ) -> SpeechTranslationViewModel {
         SpeechTranslationViewModel(
             apiClient: client,
             recorder: recorder,
-            audioPlayer: audioPlayer
+            audioPlayer: audioPlayer ?? MockAudioPlayer()
         )
     }
 }
