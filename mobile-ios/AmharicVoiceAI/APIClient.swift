@@ -33,6 +33,7 @@ enum APIClientError: LocalizedError {
     case decoding(String)
     case transport(String)
     case invalidAudioURL
+    case recordingTooLarge
 
     var errorDescription: String? {
         switch self {
@@ -46,6 +47,8 @@ enum APIClientError: LocalizedError {
             return "The backend could not be reached: \(message)"
         case .invalidAudioURL:
             return "The generated audio URL is not allowed."
+        case .recordingTooLarge:
+            return "The recording exceeds the 5 MiB upload limit. Record no more than \(SpeechRecordingLimits.maximumDurationDescription)."
         }
     }
 }
@@ -124,6 +127,12 @@ final class APIClient: APIClientProtocol, SpeechAPIClientProtocol {
         speakOutput: Bool,
         boundary: String = "AmharicVoice-\(UUID().uuidString)"
     ) throws -> URLRequest {
+        let resourceValues = try audioFileURL.resourceValues(forKeys: [.fileSizeKey])
+        if let fileSize = resourceValues.fileSize,
+           fileSize > SpeechRecordingLimits.backendMaximumUploadBytes {
+            throw APIClientError.recordingTooLarge
+        }
+
         let audioData = try Data(contentsOf: audioFileURL, options: .mappedIfSafe)
         var body = Data()
 

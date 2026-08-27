@@ -41,7 +41,32 @@ final class SpeechTranslationViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.state, .recordingReady)
         XCTAssertEqual(viewModel.recordingDuration, 4.2, accuracy: 0.001)
+        XCTAssertNil(viewModel.recordingLimitMessage)
         XCTAssertTrue(FileManager.default.fileExists(atPath: recorder.recordingURL.path))
+
+        viewModel.cancel()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: recorder.recordingURL.path))
+    }
+
+    func testMaximumDurationStopsRecordingAndShowsClearMessage() async {
+        let recorder = MockAudioRecorder(permission: .granted)
+        let viewModel = makeViewModel(recorder: recorder)
+
+        await viewModel.startRecording()
+        recorder.currentTime = SpeechRecordingLimits.maximumRecordingDuration
+        viewModel.updateRecordingDuration()
+
+        XCTAssertEqual(viewModel.state, .recordingReady)
+        XCTAssertEqual(
+            viewModel.recordingDuration,
+            SpeechRecordingLimits.maximumRecordingDuration,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            viewModel.recordingLimitMessage,
+            "Maximum recording length reached (2 minutes 43 seconds)."
+        )
+        XCTAssertEqual(recorder.stopCount, 1)
 
         viewModel.cancel()
         XCTAssertFalse(FileManager.default.fileExists(atPath: recorder.recordingURL.path))
@@ -200,10 +225,12 @@ private enum SpeechViewModelTestError: LocalizedError {
 private final class MockAudioRecorder: AudioRecording {
     var permission: MicrophonePermission
     var currentTime: TimeInterval = 0
+    private(set) var isRecording = false
     let recordingURL: URL
     private let requestedPermission: MicrophonePermission
     private(set) var permissionRequestCount = 0
     private(set) var startCount = 0
+    private(set) var stopCount = 0
     private(set) var deletedURLs: [URL] = []
 
     init(
@@ -225,15 +252,19 @@ private final class MockAudioRecorder: AudioRecording {
 
     func startRecording() throws -> URL {
         startCount += 1
+        isRecording = true
         try Data("RIFF-mocked-wave".utf8).write(to: recordingURL, options: .atomic)
         return recordingURL
     }
 
     func stopRecording() throws -> URL {
+        stopCount += 1
+        isRecording = false
         recordingURL
     }
 
     func cancelRecording() {
+        isRecording = false
         deleteRecording(at: recordingURL)
     }
 

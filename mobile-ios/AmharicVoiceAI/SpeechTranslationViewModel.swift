@@ -23,6 +23,7 @@ final class SpeechTranslationViewModel: ObservableObject {
     @Published var speakOutput = true
     @Published private(set) var state: SpeechTranslationState = .idle
     @Published private(set) var recordingDuration: TimeInterval = 0
+    @Published private(set) var recordingLimitMessage: String?
     @Published private(set) var isLoadingAudio = false
     @Published private(set) var playbackError: String?
 
@@ -84,15 +85,36 @@ final class SpeechTranslationViewModel: ObservableObject {
     }
 
     func stopRecording() {
+        finishRecording(maximumReached: false)
+    }
+
+    func updateRecordingDuration() {
+        guard state == .recording else { return }
+        let currentTime = recorder.currentTime
+        recordingDuration = min(currentTime, SpeechRecordingLimits.maximumRecordingDuration)
+
+        if currentTime >= SpeechRecordingLimits.maximumRecordingDuration || !recorder.isRecording {
+            finishRecording(maximumReached: true)
+        }
+    }
+
+    private func finishRecording(maximumReached: Bool) {
         guard state == .recording else { return }
         stopDurationUpdates()
-        recordingDuration = max(recordingDuration, recorder.currentTime)
+        recordingDuration = min(
+            max(recordingDuration, recorder.currentTime),
+            SpeechRecordingLimits.maximumRecordingDuration
+        )
 
         do {
             recordingURL = try recorder.stopRecording()
+            recordingLimitMessage = maximumReached
+                ? "Maximum recording length reached (\(SpeechRecordingLimits.maximumDurationDescription))."
+                : nil
             state = .recordingReady
         } catch {
             deleteTemporaryRecording()
+            recordingLimitMessage = nil
             state = .error(error.localizedDescription)
         }
     }
@@ -180,6 +202,7 @@ final class SpeechTranslationViewModel: ObservableObject {
         operationGeneration &+= 1
         cancelCurrentWork()
         recordingDuration = 0
+        recordingLimitMessage = nil
         playbackError = nil
         state = .idle
     }
@@ -188,6 +211,7 @@ final class SpeechTranslationViewModel: ObservableObject {
         operationGeneration &+= 1
         cancelCurrentWork()
         recordingDuration = 0
+        recordingLimitMessage = nil
         playbackError = nil
     }
 
@@ -201,7 +225,7 @@ final class SpeechTranslationViewModel: ObservableObject {
                     return
                 }
                 guard let self else { return }
-                self.recordingDuration = self.recorder.currentTime
+                self.updateRecordingDuration()
             }
         }
     }

@@ -8,6 +8,25 @@ enum MicrophonePermission: Equatable {
     case restricted
 }
 
+enum SpeechRecordingLimits {
+    // Mirrors backend/app/main.py MAX_UPLOAD_SIZE_BYTES. The backend remains authoritative.
+    static let backendMaximumUploadBytes = 5 * 1024 * 1024
+    static let sampleRateHertz = 16_000
+    static let channelCount = 1
+    static let bitsPerSample = 16
+    static let canonicalWAVHeaderBytes = 44
+    static let pcmBytesPerSecond = sampleRateHertz * channelCount * bitsPerSample / 8
+    static let maximumRecordingSeconds =
+        (backendMaximumUploadBytes - canonicalWAVHeaderBytes) / pcmBytesPerSecond
+    static let maximumRecordingDuration = TimeInterval(maximumRecordingSeconds)
+    static let estimatedMaximumWAVBytes =
+        canonicalWAVHeaderBytes + maximumRecordingSeconds * pcmBytesPerSecond
+
+    static var maximumDurationDescription: String {
+        "\(maximumRecordingSeconds / 60) minutes \(maximumRecordingSeconds % 60) seconds"
+    }
+}
+
 enum AudioRecorderError: LocalizedError {
     case couldNotStart
     case noRecording
@@ -26,6 +45,7 @@ enum AudioRecorderError: LocalizedError {
 protocol AudioRecording: AnyObject {
     var permission: MicrophonePermission { get }
     var currentTime: TimeInterval { get }
+    var isRecording: Bool { get }
 
     func requestPermission() async -> MicrophonePermission
     func startRecording() throws -> URL
@@ -36,11 +56,13 @@ protocol AudioRecording: AnyObject {
 
 @MainActor
 final class AudioRecorder: NSObject, AudioRecording, AVAudioRecorderDelegate {
+    private static let recordingFilenamePrefix = "amharicvoice-"
+
     static let wavSettings: [String: Any] = [
         AVFormatIDKey: Int(kAudioFormatLinearPCM),
-        AVSampleRateKey: 16_000.0,
-        AVNumberOfChannelsKey: 1,
-        AVLinearPCMBitDepthKey: 16,
+        AVSampleRateKey: Double(SpeechRecordingLimits.sampleRateHertz),
+        AVNumberOfChannelsKey: SpeechRecordingLimits.channelCount,
+        AVLinearPCMBitDepthKey: SpeechRecordingLimits.bitsPerSample,
         AVLinearPCMIsBigEndianKey: false,
         AVLinearPCMIsFloatKey: false
     ]
@@ -60,6 +82,7 @@ final class AudioRecorder: NSObject, AudioRecording, AVAudioRecorderDelegate {
         self.temporaryDirectory = temporaryDirectory ?? fileManager.temporaryDirectory
         self.makeIdentifier = makeIdentifier
         super.init()
+        removeStaleAppOwnedRecordings()
     }
 
     var permission: MicrophonePermission {
@@ -73,6 +96,10 @@ final class AudioRecorder: NSObject, AudioRecording, AVAudioRecorderDelegate {
 
     var currentTime: TimeInterval {
         recorder?.currentTime ?? 0
+    }
+
+    var isRecording: Bool {
+        recorder?.isRecording ?? false
     }
 
     func requestPermission() async -> MicrophonePermission {
@@ -93,14 +120,14 @@ final class AudioRecorder: NSObject, AudioRecording, AVAudioRecorderDelegate {
         try session.setActive(true)
 
         let url = temporaryDirectory
-            .appendingPathComponent("amharicvoice-\(makeIdentifier())")
+            .appendingPathComponent("\(Self.recordingFilenamePrefix)\(makeIdentifier())")
             .appendingPathExtension("wav")
 
         do {
             let recorder = try AVAudioRecorder(url: url, settings: Self.wavSettings)
             recorder.delegate = self
             recorder.prepareToRecord()
-            guard recorder.record() else {
+            guard recorder.record(forDuration: SpeechRecordingLimits.maximumRecordingDuration) else {
                 throw AudioRecorderError.couldNotStart
             }
             self.recorder = recorder
@@ -156,5 +183,28 @@ final class AudioRecorder: NSObject, AudioRecording, AVAudioRecorderDelegate {
     private func handleEncodingError(from recorderID: ObjectIdentifier) {
         guard let recorder, ObjectIdentifier(recorder) == recorderID else { return }
         cancelRecording()
+    }
+
+    private func removeStaleAppOwnedRecordings() {
+        guard let urls = try? fileManager.contentsOfDirectory(
+            at: temporaryDirectory,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return
+        }
+
+        for url in urls where isAppOwnedTemporaryWAV(url) {
+            let values = try? url.resourceValues(forKeys: [.isRegularFileKey])
+            guard values?.isRegularFile == true else { continue }
+            try? fileManager.removeItem(at: url)
+        }
+    }
+
+    private func isAppOwnedTemporaryWAV(_ url: URL) -> Bool {
+        let filenameWithoutExtension = url.deletingPathExtension().lastPathComponent
+        return url.pathExtension.lowercased() == "wav"
+            && filenameWithoutExtension.hasPrefix(Self.recordingFilenamePrefix)
+            && filenameWithoutExtension.count > Self.recordingFilenamePrefix.count
     }
 }

@@ -171,6 +171,13 @@ struct ContentView: View {
                     .foregroundStyle(.green)
                     .accessibilityLabel("Recording ready. Duration \(accessibleRecordingDuration)")
 
+                if let limitMessage = speechViewModel.recordingLimitMessage {
+                    Label(limitMessage, systemImage: "timer")
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
+                        .accessibilityLabel(limitMessage)
+                }
+
                 Button {
                     Task { await speechViewModel.uploadRecording() }
                 } label: {

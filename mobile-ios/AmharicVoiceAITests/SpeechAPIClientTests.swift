@@ -37,6 +37,28 @@ final class SpeechAPIClientTests: XCTestCase {
         XCTAssertTrue(bodyText.hasSuffix("\r\n--TestBoundary--\r\n"))
     }
 
+    func testOversizedRecordingIsRejectedBeforeMultipartConstruction() throws {
+        let audioURL = try makeSparseTemporaryWAV(
+            size: SpeechRecordingLimits.backendMaximumUploadBytes + 1
+        )
+        defer { try? FileManager.default.removeItem(at: audioURL) }
+        let client = makeClient(session: RejectingHTTPSession())
+
+        XCTAssertThrowsError(
+            try client.makeSpeechTranslationRequest(
+                audioFileURL: audioURL,
+                direction: .amharicToEnglish,
+                speakOutput: true,
+                boundary: "TestBoundary"
+            )
+        ) { error in
+            guard case APIClientError.recordingTooLarge = error else {
+                XCTFail("Expected recordingTooLarge, received \(error)")
+                return
+            }
+        }
+    }
+
     func testSpeechTranslationUsesInjectedSessionAndDecodesResponse() async throws {
         let audioURL = try makeTemporaryWAV(data: Data("RIFF".utf8))
         defer { try? FileManager.default.removeItem(at: audioURL) }
@@ -152,10 +174,24 @@ final class SpeechAPIClientTests: XCTestCase {
         try data.write(to: url, options: .atomic)
         return url
     }
+
+    private func makeSparseTemporaryWAV(size: Int) throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("speech-api-client-\(UUID().uuidString)")
+            .appendingPathExtension("wav")
+        guard FileManager.default.createFile(atPath: url.path, contents: nil) else {
+            throw SpeechAPITestError.couldNotCreateTemporaryFile
+        }
+        let handle = try FileHandle(forWritingTo: url)
+        try handle.truncate(atOffset: UInt64(size))
+        try handle.close()
+        return url
+    }
 }
 
 private enum SpeechAPITestError: Error {
     case unexpectedRequest
+    case couldNotCreateTemporaryFile
 }
 
 private final class RejectingHTTPSession: HTTPSession {
