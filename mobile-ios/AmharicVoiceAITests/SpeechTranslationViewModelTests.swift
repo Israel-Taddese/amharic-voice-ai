@@ -260,7 +260,7 @@ private final class MockAudioRecorder: AudioRecording {
     func stopRecording() throws -> URL {
         stopCount += 1
         isRecording = false
-        recordingURL
+        return recordingURL
     }
 
     func cancelRecording() {
