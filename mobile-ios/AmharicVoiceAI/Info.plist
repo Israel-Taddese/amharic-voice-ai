@@ -29,6 +29,8 @@
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Allow local backend access during development and device testing.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>AmharicVoice AI needs microphone access to record speech for translation.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
