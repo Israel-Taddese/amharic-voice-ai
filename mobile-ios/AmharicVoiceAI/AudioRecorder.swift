@@ -146,7 +146,15 @@ final class AudioRecorder: NSObject, AudioRecording, AVAudioRecorderDelegate {
         }
     }
 
-    func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
+    nonisolated func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error _: Error?) {
+        let recorderID = ObjectIdentifier(recorder)
+        Task { @MainActor [weak self] in
+            self?.handleEncodingError(from: recorderID)
+        }
+    }
+
+    private func handleEncodingError(from recorderID: ObjectIdentifier) {
+        guard let recorder, ObjectIdentifier(recorder) == recorderID else { return }
         cancelRecording()
     }
 }

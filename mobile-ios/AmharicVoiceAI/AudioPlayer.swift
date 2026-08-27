@@ -52,7 +52,15 @@ final class TranslatedAudioPlayer: NSObject, AudioPlaying, AVAudioPlayerDelegate
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
-    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully _: Bool) {
+        let playerID = ObjectIdentifier(player)
+        Task { @MainActor [weak self] in
+            self?.finishPlayback(for: playerID)
+        }
+    }
+
+    private func finishPlayback(for playerID: ObjectIdentifier) {
+        guard let player, ObjectIdentifier(player) == playerID else { return }
         self.player = nil
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }

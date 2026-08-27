@@ -37,12 +37,12 @@ final class SpeechTranslationViewModel: ObservableObject {
 
     init(
         apiClient: SpeechAPIClientProtocol = APIClient(),
-        recorder: AudioRecording = AudioRecorder(),
-        audioPlayer: AudioPlaying = TranslatedAudioPlayer()
+        recorder: AudioRecording? = nil,
+        audioPlayer: AudioPlaying? = nil
     ) {
         self.apiClient = apiClient
-        self.recorder = recorder
-        self.audioPlayer = audioPlayer
+        self.recorder = recorder ?? AudioRecorder()
+        self.audioPlayer = audioPlayer ?? TranslatedAudioPlayer()
     }
 
     func startRecording() async {
