@@ -1,6 +1,6 @@
 # AmharicVoice AI for iOS
 
-This directory contains a native SwiftUI app and unit-test target for the existing AmharicVoice AI FastAPI backend. Phase D supports backend health checks and Amharic ↔ English text translation. Speech recording and upload are intentionally deferred.
+This directory contains a native SwiftUI app and unit-test target for the existing AmharicVoice AI FastAPI backend. The app supports backend health checks plus Amharic ↔ English text and speech translation.
 
 ## Requirements
 
@@ -20,22 +20,26 @@ The Debug override accepts only an HTTP or HTTPS origin without credentials, que
 
 The app sends backend requests through an ephemeral `URLSession` and contains no cloud credentials. The FastAPI backend remains the trust boundary and performs all normalization and Azure access.
 
+Microphone permission is requested only when the user starts a recording. Recordings use 16 kHz, mono, 16-bit linear PCM WAV files with unique names in the system temporary directory. The app deletes each temporary recording after upload success, upload failure, cancellation, or replacement; recordings are not persisted by default.
+
 ## API coverage
 
 - `GET /health`
 - `POST /api/text-translate` with JSON `text` and `direction`
+- `POST /api/speech-translate` with multipart `audio`, `direction`, and `speak_output`
 
-The `direction` values match the backend contract: `am-en` and `en-am`. Response models include the backend normalization metadata.
+The `direction` values match the backend contract: `am-en` and `en-am`. Response models include the backend normalization metadata. Generated speech uses the current `audio_url` response contract. Relative audio paths are resolved only against the configured backend origin, unexpected hosts are rejected, and MP3 data is played from memory with native AVFoundation playback.
 
 ## Tests
 
 The `AmharicVoiceAITests` target covers:
 
 - backend configuration and URL construction
-- request methods, headers, paths, and JSON bodies
+- text request JSON and speech multipart request construction
 - health, text, and current speech response decoding
 - mocked network and backend error handling
-- view-model idle, loading, success, and error transitions
+- text and speech view-model state transitions, permission denial, cancellation, and cleanup
+- WAV recording settings and generated-audio origin validation
 
 Tests inject protocol-backed fakes and never contact Render or Azure. Run them in Xcode with Product > Test or from macOS with:
 
@@ -47,7 +51,3 @@ xcodebuild test \
 ```
 
 Use an available simulator identifier reported by `xcrun simctl list devices available`. The GitHub Actions workflow performs this selection dynamically.
-
-## Deferred speech prototype
-
-`AmharicVoiceAI/AudioRecorder.swift` and `AmharicVoiceAI/Info.plist.snippet` are retained as Phase E reference material but are not members of the Phase D Xcode target. The app does not request microphone permission or implement speech upload in this phase.
