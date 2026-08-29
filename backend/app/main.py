@@ -1,10 +1,11 @@
 import os
+import re
 import tempfile
 import time
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -29,6 +30,41 @@ MAX_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024
 MAX_UPLOAD_SIZE_MB = MAX_UPLOAD_SIZE_BYTES // (1024 * 1024)
 UPLOAD_READ_CHUNK_SIZE_BYTES = 1024 * 1024
 GENERATED_AUDIO_RETENTION_SECONDS = 60 * 60
+GENERATED_AUDIO_FILENAME_PATTERN = re.compile(r"translation_[0-9a-f]{32}\.mp3")
+
+
+def generated_audio_path(filename: str) -> Path | None:
+    """Resolve an app-owned generated audio filename without accepting paths."""
+    if not GENERATED_AUDIO_FILENAME_PATTERN.fullmatch(filename):
+        return None
+
+    return AUDIO_OUTPUT_DIR / filename
+
+
+def generated_audio_is_available(
+    filename: str,
+    max_age_seconds: int = GENERATED_AUDIO_RETENTION_SECONDS,
+) -> bool:
+    """Return whether an app-owned audio file is fresh enough to be served."""
+    audio_path = generated_audio_path(filename)
+
+    if audio_path is None:
+        return False
+
+    try:
+        file_age_seconds = time.time() - audio_path.stat().st_mtime
+    except OSError:
+        return False
+
+    if file_age_seconds <= max_age_seconds:
+        return True
+
+    try:
+        audio_path.unlink()
+    except OSError:
+        pass
+
+    return False
 
 openapi_tags = [
     {
@@ -68,6 +104,27 @@ rate_limiter = InMemoryRateLimiter(max_requests=20, window_seconds=60)
 @app.middleware("http")
 async def rate_limit_requests(request: Request, call_next):
     return await rate_limiter(request, call_next)
+
+
+@app.middleware("http")
+async def enforce_generated_audio_retention(request: Request, call_next):
+    audio_path_prefix = "/audio/"
+
+    if request.url.path.startswith(audio_path_prefix):
+        filename = request.url.path.removeprefix(audio_path_prefix)
+
+        if not generated_audio_is_available(filename):
+            return Response(
+                status_code=404,
+                headers={"Cache-Control": "private, no-store"},
+            )
+
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "private, no-store"
+        return response
+
+    return await call_next(request)
+
 
 LANGUAGE_ROUTES = {
     "am-en": {
@@ -118,6 +175,9 @@ def cleanup_generated_audio(max_age_seconds: int = GENERATED_AUDIO_RETENTION_SEC
     deleted_count = 0
 
     for audio_file in AUDIO_OUTPUT_DIR.glob("translation_*.mp3"):
+        if not GENERATED_AUDIO_FILENAME_PATTERN.fullmatch(audio_file.name):
+            continue
+
         try:
             file_age_seconds = now - audio_file.stat().st_mtime
 
