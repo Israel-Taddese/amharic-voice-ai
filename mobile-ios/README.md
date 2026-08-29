@@ -12,8 +12,8 @@ Open `AmharicVoiceAI.xcodeproj` in Xcode, select the `AmharicVoiceAI` scheme, an
 
 ## Backend configuration
 
-- Debug builds default to `http://127.0.0.1:8000`.
-- Release builds use `https://amharic-voice-ai.onrender.com`.
+- Debug builds default to `http://127.0.0.1:8000` and use the Debug-only local-network ATS allowance.
+- Release builds use `https://amharic-voice-ai.onrender.com` with default ATS protections and no exceptions.
 - To test a Debug build on a physical device, set the scheme environment variable `AMHARICVOICE_BACKEND_URL` to a safe local backend URL such as `http://192.168.1.20:8000`.
 
 The Debug override accepts only an HTTP or HTTPS origin without credentials, query parameters, fragments, or an application path. Invalid values fall back to the loopback URL. Local networking is allowed for development; the Release backend remains HTTPS.
@@ -21,6 +21,8 @@ The Debug override accepts only an HTTP or HTTPS origin without credentials, que
 The app sends backend requests through an ephemeral `URLSession` and contains no cloud credentials. The FastAPI backend remains the trust boundary and performs all normalization and Azure access.
 
 Microphone permission is requested only when the user starts a recording. Recordings use 16 kHz, mono, 16-bit linear PCM WAV files with unique names in the system temporary directory. The app deletes each temporary recording after upload success, upload failure, cancellation, or replacement; recordings are not persisted by default.
+
+See [`PRIVACY_TESTFLIGHT.md`](PRIVACY_TESTFLIGHT.md) for the native data flow, privacy-manifest rationale, and macOS, physical-iPhone, and TestFlight validation checklist.
 
 ## API coverage
 

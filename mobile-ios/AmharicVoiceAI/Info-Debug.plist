@@ -22,6 +22,13 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Allow local backend access during development and device testing.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>AmharicVoice AI uses the microphone only when you choose to record speech and sends that recording for translation.</string>
 	<key>UIApplicationSceneManifest</key>

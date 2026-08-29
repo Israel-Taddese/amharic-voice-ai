@@ -141,6 +141,21 @@ final class SpeechTranslationViewModelTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: recorder.recordingURL.path))
     }
 
+    func testSceneInactivityCancelsRecordingAndDeletesTemporaryRecording() async {
+        let recorder = MockAudioRecorder(permission: .granted)
+        let viewModel = makeViewModel(recorder: recorder)
+
+        await viewModel.startRecording()
+        XCTAssertEqual(viewModel.state, .recording)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: recorder.recordingURL.path))
+
+        viewModel.handleSceneInactivity()
+
+        XCTAssertEqual(viewModel.state, .cancelled)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: recorder.recordingURL.path))
+        XCTAssertEqual(recorder.deletedURLs, [recorder.recordingURL])
+    }
+
     func testTranslatedAudioUsesControlledMockDataAndPlayer() async {
         let response = makeSpeechResponse()
         let audioData = Data([0x49, 0x44, 0x33])

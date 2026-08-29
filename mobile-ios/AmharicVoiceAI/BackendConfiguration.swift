@@ -1,13 +1,15 @@
 import Foundation
 
 struct BackendConfiguration: Equatable {
-    static let debugURLOverrideKey = "AMHARICVOICE_BACKEND_URL"
-
     let baseURL: URL
+
+#if DEBUG
+    static let debugURLOverrideKey = "AMHARICVOICE_BACKEND_URL"
 
     static let local = BackendConfiguration(
         baseURL: URL(string: "http://127.0.0.1:8000")!
     )
+#endif
 
     static let production = BackendConfiguration(
         baseURL: URL(string: "https://amharic-voice-ai.onrender.com")!
@@ -21,6 +23,7 @@ struct BackendConfiguration: Equatable {
 #endif
     }
 
+#if DEBUG
     static func debug(environment: [String: String]) -> BackendConfiguration {
         guard let overrideURL = safeOverrideURL(
             from: environment[debugURLOverrideKey]
@@ -30,6 +33,7 @@ struct BackendConfiguration: Equatable {
 
         return BackendConfiguration(baseURL: overrideURL)
     }
+#endif
 
     func endpoint(_ path: String) -> URL {
         let relativePath = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -40,6 +44,7 @@ struct BackendConfiguration: Equatable {
             }
     }
 
+#if DEBUG
     private static func safeOverrideURL(from rawValue: String?) -> URL? {
         guard
             let rawValue,
@@ -58,4 +63,5 @@ struct BackendConfiguration: Equatable {
 
         return url
     }
+#endif
 }

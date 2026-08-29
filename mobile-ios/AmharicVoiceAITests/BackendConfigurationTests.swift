@@ -2,9 +2,11 @@ import XCTest
 @testable import AmharicVoiceAI
 
 final class BackendConfigurationTests: XCTestCase {
+#if DEBUG
     func testLocalConfigurationUsesLoopbackBackend() {
         XCTAssertEqual(BackendConfiguration.local.baseURL.absoluteString, "http://127.0.0.1:8000")
     }
+#endif
 
     func testProductionConfigurationUsesRenderOverHTTPS() {
         XCTAssertEqual(
@@ -14,6 +16,7 @@ final class BackendConfigurationTests: XCTestCase {
         XCTAssertEqual(BackendConfiguration.production.baseURL.scheme, "https")
     }
 
+#if DEBUG
     func testDebugConfigurationAcceptsSafeBackendOverride() {
         let configuration = BackendConfiguration.debug(environment: [
             BackendConfiguration.debugURLOverrideKey: "http://192.168.1.20:8000"
@@ -37,6 +40,7 @@ final class BackendConfigurationTests: XCTestCase {
 
         XCTAssertEqual(configuration, .local)
     }
+#endif
 
     func testEndpointBuildsNestedBackendPath() {
         let endpoint = BackendConfiguration.production.endpoint("/api/text-translate/")

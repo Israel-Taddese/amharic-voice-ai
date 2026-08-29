@@ -10,6 +10,7 @@ struct ContentView: View {
         var id: String { rawValue }
     }
 
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var viewModel: TranslationViewModel
     @StateObject private var speechViewModel: SpeechTranslationViewModel
     @State private var translationMode: TranslationMode = .text
@@ -55,6 +56,10 @@ struct ContentView: View {
             }
             .onDisappear {
                 speechViewModel.cancel()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                guard phase != .active else { return }
+                speechViewModel.handleSceneInactivity()
             }
         }
     }

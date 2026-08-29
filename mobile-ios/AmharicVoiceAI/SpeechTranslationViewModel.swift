@@ -198,6 +198,18 @@ final class SpeechTranslationViewModel: ObservableObject {
         state = .cancelled
     }
 
+    func handleSceneInactivity() {
+        switch state {
+        case .recording, .recordingReady, .uploading:
+            cancel()
+        case .idle, .requestingPermission, .success, .error, .cancelled:
+            audioTask?.cancel()
+            audioTask = nil
+            isLoadingAudio = false
+            audioPlayer.stop()
+        }
+    }
+
     func reset() {
         operationGeneration &+= 1
         cancelCurrentWork()
