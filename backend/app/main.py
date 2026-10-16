@@ -3,11 +3,14 @@ import re
 import tempfile
 import time
 import uuid
+from asyncio import CancelledError
 from pathlib import Path
+from threading import BoundedSemaphore, Lock
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
 from .config import settings
 from .models import (
@@ -29,6 +32,10 @@ AUDIO_OUTPUT_DIR.mkdir(exist_ok=True)
 MAX_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024
 MAX_UPLOAD_SIZE_MB = MAX_UPLOAD_SIZE_BYTES // (1024 * 1024)
 UPLOAD_READ_CHUNK_SIZE_BYTES = 1024 * 1024
+# Keep cloud concurrency conservative while leaving the shared worker pool
+# available for health/text requests. This ceiling is per server process.
+MAX_CONCURRENT_SPEECH_REQUESTS = 2
+speech_processing_slots = BoundedSemaphore(MAX_CONCURRENT_SPEECH_REQUESTS)
 GENERATED_AUDIO_RETENTION_SECONDS = 60 * 60
 GENERATED_AUDIO_FILENAME_PATTERN = re.compile(r"translation_[0-9a-f]{32}\.mp3")
 
@@ -203,6 +210,52 @@ def save_audio_file(audio_bytes: bytes) -> str:
     return f"/audio/{filename}"
 
 
+def _remove_temporary_upload(file_path: str | None) -> None:
+    if file_path is None:
+        return
+    try:
+        os.remove(file_path)
+    except OSError:
+        pass
+
+
+def _translate_speech_file(
+    file_path: str,
+    route: dict[str, str],
+    direction: TranslationDirection,
+    speak_output: bool,
+) -> SpeechTranslateResponse:
+    """Run the existing blocking speech pipeline in one worker thread."""
+    transcript = recognize_speech_from_wav(file_path, locale=route["speech_locale"])
+
+    if not transcript:
+        raise RuntimeError("No transcript returned from Azure Speech.")
+
+    translated, normalization = translate_with_normalization(transcript, route)
+
+    audio_url = None
+    audio_mime_type = None
+
+    if speak_output:
+        audio_bytes = synthesize_speech_mp3(translated, voice_name=route["target_voice"])
+        audio_url = save_audio_file(audio_bytes)
+        audio_mime_type = "audio/mpeg"
+
+    return SpeechTranslateResponse(
+        direction=direction,
+        speech_locale=route["speech_locale"],
+        source_language=route["source_text_lang"],
+        target_language=route["target_text_lang"],
+        transcript=transcript,
+        translated_text=translated,
+        normalized_text=normalization.normalized_text if normalization.was_normalized else None,
+        normalization_applied=normalization.was_normalized,
+        normalization_note=normalization.note,
+        audio_url=audio_url,
+        audio_mime_type=audio_mime_type,
+    )
+
+
 @app.get(
     "/health",
     response_model=HealthResponse,
@@ -262,6 +315,30 @@ async def speech_translate(
         )
 
     suffix = os.path.splitext(audio.filename)[1] or ".wav"
+    tmp_path: str | None = None
+    cleanup_lock = Lock()
+    worker_claimed = False
+    abandoned = False
+    slot_acquired = False
+    processing_slots = speech_processing_slots
+
+    def process_uploaded_audio(file_path: str) -> SpeechTranslateResponse:
+        nonlocal worker_claimed
+        # A cancelled queued request must not start work on a deleted upload.
+        with cleanup_lock:
+            if abandoned:
+                raise CancelledError()
+            worker_claimed = True
+
+        try:
+            return _translate_speech_file(file_path, route, direction, speak_output)
+        finally:
+            # Cancellation cannot forcibly stop a native SDK call. Its worker
+            # keeps ownership of the WAV until processing has actually ended.
+            try:
+                _remove_temporary_upload(file_path)
+            finally:
+                processing_slots.release()
 
     try:
         bytes_written = 0
@@ -280,34 +357,14 @@ async def speech_translate(
 
                 tmp.write(chunk)
 
-        transcript = recognize_speech_from_wav(tmp_path, locale=route["speech_locale"])
-
-        if not transcript:
-            raise RuntimeError("No transcript returned from Azure Speech.")
-
-        translated, normalization = translate_with_normalization(transcript, route)
-
-        audio_url = None
-        audio_mime_type = None
-
-        if speak_output:
-            audio_bytes = synthesize_speech_mp3(translated, voice_name=route["target_voice"])
-            audio_url = save_audio_file(audio_bytes)
-            audio_mime_type = "audio/mpeg"
-
-        return SpeechTranslateResponse(
-            direction=direction,
-            speech_locale=route["speech_locale"],
-            source_language=route["source_text_lang"],
-            target_language=route["target_text_lang"],
-            transcript=transcript,
-            translated_text=translated,
-            normalized_text=normalization.normalized_text if normalization.was_normalized else None,
-            normalization_applied=normalization.was_normalized,
-            normalization_note=normalization.note,
-            audio_url=audio_url,
-            audio_mime_type=audio_mime_type,
-        )
+        if not processing_slots.acquire(blocking=False):
+            raise HTTPException(
+                status_code=429,
+                detail="Speech translation is busy. Please try again shortly.",
+                headers={"Retry-After": "1"},
+            )
+        slot_acquired = True
+        return await run_in_threadpool(process_uploaded_audio, tmp_path)
 
     except HTTPException:
         raise
@@ -331,8 +388,11 @@ async def speech_translate(
         raise HTTPException(status_code=500, detail=error_message) from exc
 
     finally:
-        try:
-            if "tmp_path" in locals():
-                os.remove(tmp_path)
-        except OSError:
-            pass
+        with cleanup_lock:
+            abandoned = True
+            if not worker_claimed:
+                try:
+                    _remove_temporary_upload(tmp_path)
+                finally:
+                    if slot_acquired:
+                        processing_slots.release()
