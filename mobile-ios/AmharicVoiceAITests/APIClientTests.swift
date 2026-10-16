@@ -29,7 +29,8 @@ final class APIClientTests: XCTestCase {
         }
         let client = APIClient(
             configuration: BackendConfiguration(baseURL: URL(string: "https://example.com")!),
-            session: session
+            session: session,
+            consent: grantedConsent()
         )
         let payload = TextTranslateRequest(text: "ሰላም", direction: .amharicToEnglish)
 
@@ -80,7 +81,8 @@ final class APIClientTests: XCTestCase {
         }
         let client = APIClient(
             configuration: BackendConfiguration(baseURL: URL(string: "https://example.com")!),
-            session: session
+            session: session,
+            consent: grantedConsent()
         )
 
         let response = try await client.translateText(
@@ -104,7 +106,8 @@ final class APIClientTests: XCTestCase {
         }
         let client = APIClient(
             configuration: BackendConfiguration(baseURL: URL(string: "https://example.com")!),
-            session: session
+            session: session,
+            consent: grantedConsent()
         )
 
         do {
@@ -216,6 +219,12 @@ final class APIClientTests: XCTestCase {
         } catch {
             XCTFail("Expected CancellationError, received \(error)")
         }
+    }
+
+    private func grantedConsent() -> ProcessingConsentStore {
+        let consent = ProcessingConsentStore()
+        consent.grant()
+        return consent
     }
 }
 

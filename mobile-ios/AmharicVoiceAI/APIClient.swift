@@ -60,17 +60,20 @@ final class APIClient: APIClientProtocol, SpeechAPIClientProtocol {
 
     private let configuration: BackendConfiguration
     private let session: HTTPSession
+    private let consent: ProcessingConsentStore
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
     init(
         configuration: BackendConfiguration = .current,
         session: HTTPSession? = nil,
+        consent: ProcessingConsentStore = ProcessingConsentStore(),
         encoder: JSONEncoder = JSONEncoder(),
         decoder: JSONDecoder = JSONDecoder()
     ) {
         self.configuration = configuration
         self.session = session ?? Self.makeEphemeralSession()
+        self.consent = consent
         self.encoder = encoder
         self.decoder = decoder
     }
@@ -80,7 +83,9 @@ final class APIClient: APIClientProtocol, SpeechAPIClientProtocol {
     }
 
     func translateText(_ request: TextTranslateRequest) async throws -> TextTranslateResponse {
-        try await execute(makeTextTranslationRequest(request))
+        try Task.checkCancellation()
+        let authorization = try consent.authorization()
+        return try await execute(makeTextTranslationRequest(request), authorization: authorization)
     }
 
     func translateSpeech(
@@ -88,15 +93,19 @@ final class APIClient: APIClientProtocol, SpeechAPIClientProtocol {
         direction: TranslationDirection,
         speakOutput: Bool
     ) async throws -> SpeechTranslateResponse {
+        try Task.checkCancellation()
+        let authorization = try consent.authorization()
         let request = try makeSpeechTranslationRequest(
             audioFileURL: audioFileURL,
             direction: direction,
             speakOutput: speakOutput
         )
-        return try await execute(request)
+        return try await execute(request, authorization: authorization)
     }
 
     func fetchGeneratedAudio(at audioURL: String) async throws -> Data {
+        try Task.checkCancellation()
+        let authorization = try consent.authorization()
         var request = URLRequest(
             url: try resolveGeneratedAudioURL(audioURL),
             cachePolicy: .reloadIgnoringLocalCacheData,
@@ -104,7 +113,7 @@ final class APIClient: APIClientProtocol, SpeechAPIClientProtocol {
         )
         request.httpMethod = "GET"
         request.setValue("audio/mpeg", forHTTPHeaderField: "Accept")
-        return try await executeData(request)
+        return try await executeData(request, authorization: authorization)
     }
 
     func makeHealthRequest() -> URLRequest {
@@ -114,6 +123,7 @@ final class APIClient: APIClientProtocol, SpeechAPIClientProtocol {
     }
 
     func makeTextTranslationRequest(_ payload: TextTranslateRequest) throws -> URLRequest {
+        _ = try consent.authorization()
         var request = makeRequest(path: "api/text-translate")
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -127,6 +137,7 @@ final class APIClient: APIClientProtocol, SpeechAPIClientProtocol {
         speakOutput: Bool,
         boundary: String = "AmharicVoice-\(UUID().uuidString)"
     ) throws -> URLRequest {
+        _ = try consent.authorization()
         let resourceValues = try audioFileURL.resourceValues(forKeys: [.fileSizeKey])
         if let fileSize = resourceValues.fileSize,
            fileSize > SpeechRecordingLimits.backendMaximumUploadBytes {
@@ -210,19 +221,37 @@ final class APIClient: APIClientProtocol, SpeechAPIClientProtocol {
         return request
     }
 
-    private func execute<Response: Decodable>(_ request: URLRequest) async throws -> Response {
-        let data = try await executeData(request)
+    private func execute<Response: Decodable>(
+        _ request: URLRequest,
+        authorization: ProcessingAuthorization? = nil
+    ) async throws -> Response {
+        let data = try await executeData(request, authorization: authorization)
+        let decoded: Response
 
         do {
-            return try decoder.decode(Response.self, from: data)
+            decoded = try decoder.decode(Response.self, from: data)
         } catch {
             throw APIClientError.decoding(error.localizedDescription)
         }
+
+        try Task.checkCancellation()
+        if let authorization {
+            try consent.validate(authorization)
+        }
+        return decoded
     }
 
-    private func executeData(_ request: URLRequest) async throws -> Data {
+    private func executeData(
+        _ request: URLRequest,
+        authorization: ProcessingAuthorization? = nil
+    ) async throws -> Data {
         let data: Data
         let response: URLResponse
+
+        try Task.checkCancellation()
+        if let authorization {
+            try consent.validate(authorization)
+        }
 
         do {
             (data, response) = try await session.data(for: request)
@@ -234,6 +263,11 @@ final class APIClient: APIClientProtocol, SpeechAPIClientProtocol {
             throw error
         } catch {
             throw APIClientError.transport(error.localizedDescription)
+        }
+
+        try Task.checkCancellation()
+        if let authorization {
+            try consent.validate(authorization)
         }
 
         guard let httpResponse = response as? HTTPURLResponse else {

@@ -24,6 +24,12 @@
 		B10000000000000000000004 /* AudioRecorderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000004 /* AudioRecorderTests.swift */; };
 		B10000000000000000000005 /* SpeechAPIClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000005 /* SpeechAPIClientTests.swift */; };
 		B10000000000000000000006 /* SpeechTranslationViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000006 /* SpeechTranslationViewModelTests.swift */; };
+		C10000000000000000000001 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000001 /* PrivacyInfo.xcprivacy */; };
+		D10000000000000000000001 /* ProcessingConsent.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000001 /* ProcessingConsent.swift */; };
+		D10000000000000000000002 /* PrivacyPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000002 /* PrivacyPolicy.swift */; };
+		D10000000000000000000003 /* PrivacyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000003 /* PrivacyView.swift */; };
+		D10000000000000000000004 /* ProcessingConsentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000004 /* ProcessingConsentTests.swift */; };
+		D10000000000000000000005 /* PrivacyAPIClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000005 /* PrivacyAPIClientTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -58,6 +64,13 @@
 		B20000000000000000000004 /* AudioRecorderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorderTests.swift; sourceTree = "<group>"; };
 		B20000000000000000000005 /* SpeechAPIClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechAPIClientTests.swift; sourceTree = "<group>"; };
 		B20000000000000000000006 /* SpeechTranslationViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechTranslationViewModelTests.swift; sourceTree = "<group>"; };
+		C20000000000000000000001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		C20000000000000000000002 /* Info-Debug.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info-Debug.plist"; sourceTree = "<group>"; };
+		D20000000000000000000001 /* ProcessingConsent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessingConsent.swift; sourceTree = "<group>"; };
+		D20000000000000000000002 /* PrivacyPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyPolicy.swift; sourceTree = "<group>"; };
+		D20000000000000000000003 /* PrivacyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyView.swift; sourceTree = "<group>"; };
+		D20000000000000000000004 /* ProcessingConsentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessingConsentTests.swift; sourceTree = "<group>"; };
+		D20000000000000000000005 /* PrivacyAPIClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyAPIClientTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -100,7 +113,12 @@
 				B20000000000000000000002 /* AudioPlayer.swift */,
 				A20000000000000000000002 /* BackendConfiguration.swift */,
 				A20000000000000000000004 /* Models.swift */,
+				D20000000000000000000001 /* ProcessingConsent.swift */,
+				D20000000000000000000002 /* PrivacyPolicy.swift */,
+				D20000000000000000000003 /* PrivacyView.swift */,
 				A20000000000000000000007 /* Assets.xcassets */,
+				C20000000000000000000001 /* PrivacyInfo.xcprivacy */,
+				C20000000000000000000002 /* Info-Debug.plist */,
 				A2000000000000000000000C /* Info.plist */,
 			);
 			path = AmharicVoiceAI;
@@ -116,6 +134,8 @@
 				B20000000000000000000004 /* AudioRecorderTests.swift */,
 				B20000000000000000000005 /* SpeechAPIClientTests.swift */,
 				B20000000000000000000006 /* SpeechTranslationViewModelTests.swift */,
+				D20000000000000000000004 /* ProcessingConsentTests.swift */,
+				D20000000000000000000005 /* PrivacyAPIClientTests.swift */,
 			);
 			path = AmharicVoiceAITests;
 			sourceTree = "<group>";
@@ -211,6 +231,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000007 /* Assets.xcassets in Resources */,
+				C10000000000000000000001 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -237,6 +258,9 @@
 				B10000000000000000000001 /* AudioRecorder.swift in Sources */,
 				B10000000000000000000002 /* AudioPlayer.swift in Sources */,
 				B10000000000000000000003 /* SpeechTranslationViewModel.swift in Sources */,
+				D10000000000000000000001 /* ProcessingConsent.swift in Sources */,
+				D10000000000000000000002 /* PrivacyPolicy.swift in Sources */,
+				D10000000000000000000003 /* PrivacyView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -251,6 +275,8 @@
 				B10000000000000000000004 /* AudioRecorderTests.swift in Sources */,
 				B10000000000000000000005 /* SpeechAPIClientTests.swift in Sources */,
 				B10000000000000000000006 /* SpeechTranslationViewModelTests.swift in Sources */,
+				D10000000000000000000004 /* ProcessingConsentTests.swift in Sources */,
+				D10000000000000000000005 /* PrivacyAPIClientTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -390,7 +416,7 @@
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = AmharicVoiceAI/Info.plist;
+				INFOPLIST_FILE = "AmharicVoiceAI/Info-Debug.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

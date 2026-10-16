@@ -30,6 +30,7 @@ final class SpeechTranslationViewModel: ObservableObject {
     private let apiClient: SpeechAPIClientProtocol
     private let recorder: AudioRecording
     private let audioPlayer: AudioPlaying
+    private let consent: ProcessingConsentStore
     private var recordingURL: URL?
     private var durationTask: Task<Void, Never>?
     private var uploadTask: Task<SpeechTranslateResponse, Error>?
@@ -37,16 +38,25 @@ final class SpeechTranslationViewModel: ObservableObject {
     private var operationGeneration = 0
 
     init(
-        apiClient: SpeechAPIClientProtocol = APIClient(),
+        apiClient: SpeechAPIClientProtocol? = nil,
         recorder: AudioRecording? = nil,
-        audioPlayer: AudioPlaying? = nil
+        audioPlayer: AudioPlaying? = nil,
+        consent: ProcessingConsentStore = ProcessingConsentStore()
     ) {
-        self.apiClient = apiClient
+        self.apiClient = apiClient ?? APIClient(consent: consent)
         self.recorder = recorder ?? AudioRecorder()
         self.audioPlayer = audioPlayer ?? TranslatedAudioPlayer()
+        self.consent = consent
     }
 
     func startRecording() async {
+        let authorization: ProcessingAuthorization
+        do {
+            authorization = try consent.authorization()
+        } catch {
+            state = .error(error.localizedDescription)
+            return
+        }
         prepareForNewRecording()
         state = .requestingPermission
         let generation = operationGeneration
@@ -60,6 +70,12 @@ final class SpeechTranslationViewModel: ObservableObject {
 
         guard generation == operationGeneration else { return }
         guard !Task.isCancelled else {
+            state = .cancelled
+            return
+        }
+        do {
+            try consent.validate(authorization)
+        } catch {
             state = .cancelled
             return
         }
@@ -125,6 +141,15 @@ final class SpeechTranslationViewModel: ObservableObject {
             return
         }
 
+        let authorization: ProcessingAuthorization
+        do {
+            authorization = try consent.authorization()
+        } catch {
+            deleteTemporaryRecording()
+            state = .error(error.localizedDescription)
+            return
+        }
+
         state = .uploading
         playbackError = nil
         let generation = operationGeneration
@@ -141,6 +166,7 @@ final class SpeechTranslationViewModel: ObservableObject {
 
         do {
             let response = try await task.value
+            try consent.validate(authorization)
             guard generation == operationGeneration else { return }
             state = .success(response)
         } catch is CancellationError {
@@ -163,6 +189,14 @@ final class SpeechTranslationViewModel: ObservableObject {
             return
         }
 
+        let authorization: ProcessingAuthorization
+        do {
+            authorization = try consent.authorization()
+        } catch {
+            playbackError = error.localizedDescription
+            return
+        }
+
         if let mimeType = response.audioMimeType,
            mimeType.lowercased() != "audio/mpeg" {
             playbackError = AudioPlaybackError.unsupportedFormat.localizedDescription
@@ -177,7 +211,8 @@ final class SpeechTranslationViewModel: ObservableObject {
 
         do {
             let data = try await task.value
-            guard generation == operationGeneration else { return }
+            try consent.validate(authorization)
+            guard generation == operationGeneration, !task.isCancelled else { return }
             try audioPlayer.play(data: data)
         } catch is CancellationError {
             // User cancellation is an expected state and should not show an error.
@@ -196,6 +231,18 @@ final class SpeechTranslationViewModel: ObservableObject {
         operationGeneration &+= 1
         cancelCurrentWork()
         state = .cancelled
+    }
+
+    func handleSceneInactivity() {
+        switch state {
+        case .recording, .recordingReady, .uploading:
+            cancel()
+        case .idle, .requestingPermission, .success, .error, .cancelled:
+            audioTask?.cancel()
+            audioTask = nil
+            isLoadingAudio = false
+            audioPlayer.stop()
+        }
     }
 
     func reset() {

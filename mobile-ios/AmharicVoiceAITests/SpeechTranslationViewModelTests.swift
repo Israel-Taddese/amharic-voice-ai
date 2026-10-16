@@ -4,6 +4,48 @@ import XCTest
 
 @MainActor
 final class SpeechTranslationViewModelTests: XCTestCase {
+    func testMissingProcessingConsentDoesNotRequestMicrophoneOrStartRecording() async {
+        let recorder = MockAudioRecorder(permission: .undetermined)
+        let viewModel = SpeechTranslationViewModel(
+            apiClient: MockSpeechAPIClient(),
+            recorder: recorder,
+            audioPlayer: MockAudioPlayer()
+        )
+
+        await viewModel.startRecording()
+
+        XCTAssertEqual(viewModel.state, .error(ProcessingConsentError.required.localizedDescription))
+        XCTAssertEqual(recorder.permissionRequestCount, 0)
+        XCTAssertEqual(recorder.startCount, 0)
+    }
+
+    func testWithdrawalAndRegrantWhilePermissionIsPendingDoNotStartRecording() async {
+        let permissionRequested = expectation(description: "Microphone permission requested")
+        let consent = ProcessingConsentStore()
+        consent.grant()
+        let recorder = MockAudioRecorder(
+            permission: .undetermined,
+            permissionRequested: permissionRequested
+        )
+        let viewModel = makeViewModel(recorder: recorder, consent: consent)
+
+        let recording = Task { await viewModel.startRecording() }
+        await fulfillment(of: [permissionRequested], timeout: 1)
+        XCTAssertEqual(viewModel.state, .requestingPermission)
+
+        consent.withdraw()
+        viewModel.reset()
+        consent.grant()
+        recorder.completePermission(with: .granted)
+        await recording.value
+
+        XCTAssertEqual(viewModel.state, .idle)
+        XCTAssertEqual(recorder.permissionRequestCount, 1)
+        XCTAssertEqual(recorder.startCount, 0)
+        XCTAssertFalse(recorder.isRecording)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: recorder.recordingURL.path))
+    }
+
     func testPermissionDeniedMovesToClearErrorWithoutStartingRecorder() async {
         let recorder = MockAudioRecorder(permission: .undetermined, requestedPermission: .denied)
         let viewModel = makeViewModel(recorder: recorder)
@@ -141,6 +183,21 @@ final class SpeechTranslationViewModelTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: recorder.recordingURL.path))
     }
 
+    func testSceneInactivityCancelsRecordingAndDeletesTemporaryRecording() async {
+        let recorder = MockAudioRecorder(permission: .granted)
+        let viewModel = makeViewModel(recorder: recorder)
+
+        await viewModel.startRecording()
+        XCTAssertEqual(viewModel.state, .recording)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: recorder.recordingURL.path))
+
+        viewModel.handleSceneInactivity()
+
+        XCTAssertEqual(viewModel.state, .cancelled)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: recorder.recordingURL.path))
+        XCTAssertEqual(recorder.deletedURLs, [recorder.recordingURL])
+    }
+
     func testTranslatedAudioUsesControlledMockDataAndPlayer() async {
         let response = makeSpeechResponse()
         let audioData = Data([0x49, 0x44, 0x33])
@@ -180,15 +237,111 @@ final class SpeechTranslationViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.playbackError, "The translated audio format is not supported.")
     }
 
+    func testSceneInactivityPreventsLateAudioDownloadFromStartingPlayback() async {
+        let audioStarted = expectation(description: "Audio download started")
+        let response = makeSpeechResponse()
+        let client = ControlledAudioSpeechAPIClient(response: response, audioStarted: audioStarted)
+        let recorder = MockAudioRecorder(permission: .granted)
+        let player = MockAudioPlayer()
+        let viewModel = makeViewModel(client: client, recorder: recorder, audioPlayer: player)
+
+        await viewModel.startRecording()
+        viewModel.stopRecording()
+        await viewModel.uploadRecording()
+
+        let playback = Task { await viewModel.playTranslatedAudio() }
+        await fulfillment(of: [audioStarted], timeout: 1)
+        XCTAssertTrue(viewModel.isLoadingAudio)
+
+        viewModel.handleSceneInactivity()
+        client.completeAudio(with: Data([0x49, 0x44, 0x33]))
+        await playback.value
+
+        XCTAssertEqual(viewModel.state, .success(response))
+        XCTAssertFalse(viewModel.isLoadingAudio)
+        XCTAssertTrue(player.playedData.isEmpty)
+        XCTAssertNil(viewModel.playbackError)
+    }
+
+    func testWithdrawalDeletesReadyRecordingAndBlocksAnotherRecording() async {
+        let consent = ProcessingConsentStore()
+        consent.grant()
+        let recorder = MockAudioRecorder(permission: .granted)
+        let viewModel = makeViewModel(recorder: recorder, consent: consent)
+
+        await viewModel.startRecording()
+        viewModel.stopRecording()
+        consent.withdraw()
+        viewModel.reset()
+
+        XCTAssertEqual(viewModel.state, .idle)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: recorder.recordingURL.path))
+        await viewModel.startRecording()
+        XCTAssertEqual(viewModel.state, .error(ProcessingConsentError.required.localizedDescription))
+        XCTAssertEqual(recorder.startCount, 1)
+    }
+
+    func testWithdrawalAndRegrantDiscardLateUploadResponse() async {
+        let uploadStarted = expectation(description: "Speech upload started")
+        let client = ControlledSpeechAPIClient(uploadStarted: uploadStarted)
+        let consent = ProcessingConsentStore()
+        consent.grant()
+        let recorder = MockAudioRecorder(permission: .granted)
+        let viewModel = makeViewModel(client: client, recorder: recorder, consent: consent)
+
+        await viewModel.startRecording()
+        viewModel.stopRecording()
+        let upload = Task { await viewModel.uploadRecording() }
+        await fulfillment(of: [uploadStarted], timeout: 1)
+        consent.withdraw()
+        viewModel.reset()
+        consent.grant()
+        client.completeUpload(with: .success(makeSpeechResponse()))
+        await upload.value
+
+        XCTAssertEqual(viewModel.state, .idle)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: recorder.recordingURL.path))
+    }
+
+    func testWithdrawalAndRegrantPreventLateAudioPlayback() async {
+        let audioStarted = expectation(description: "Audio download started")
+        let client = ControlledAudioSpeechAPIClient(response: makeSpeechResponse(), audioStarted: audioStarted)
+        let consent = ProcessingConsentStore()
+        consent.grant()
+        let recorder = MockAudioRecorder(permission: .granted)
+        let player = MockAudioPlayer()
+        let viewModel = makeViewModel(client: client, recorder: recorder, audioPlayer: player, consent: consent)
+
+        await viewModel.startRecording()
+        viewModel.stopRecording()
+        await viewModel.uploadRecording()
+        let playback = Task { await viewModel.playTranslatedAudio() }
+        await fulfillment(of: [audioStarted], timeout: 1)
+        consent.withdraw()
+        viewModel.reset()
+        consent.grant()
+        client.completeAudio(with: Data([0x49, 0x44, 0x33]))
+        await playback.value
+
+        XCTAssertEqual(viewModel.state, .idle)
+        XCTAssertTrue(player.playedData.isEmpty)
+        XCTAssertFalse(viewModel.isLoadingAudio)
+        XCTAssertNil(viewModel.playbackError)
+    }
+
     private func makeViewModel(
         client: SpeechAPIClientProtocol = MockSpeechAPIClient(),
         recorder: MockAudioRecorder,
-        audioPlayer: AudioPlaying? = nil
+        audioPlayer: AudioPlaying? = nil,
+        consent: ProcessingConsentStore? = nil
     ) -> SpeechTranslationViewModel {
-        SpeechTranslationViewModel(
+        let store = consent ?? ProcessingConsentStore()
+        if consent == nil { store.grant() }
+        return SpeechTranslationViewModel(
             apiClient: client,
             recorder: recorder,
-            audioPlayer: audioPlayer ?? MockAudioPlayer()
+            audioPlayer: audioPlayer ?? MockAudioPlayer(),
+            consent: store
         )
     }
 }
@@ -228,6 +381,8 @@ private final class MockAudioRecorder: AudioRecording {
     private(set) var isRecording = false
     let recordingURL: URL
     private let requestedPermission: MicrophonePermission
+    private let permissionRequested: XCTestExpectation?
+    private var permissionContinuation: CheckedContinuation<MicrophonePermission, Never>?
     private(set) var permissionRequestCount = 0
     private(set) var startCount = 0
     private(set) var stopCount = 0
@@ -235,10 +390,12 @@ private final class MockAudioRecorder: AudioRecording {
 
     init(
         permission: MicrophonePermission,
-        requestedPermission: MicrophonePermission = .granted
+        requestedPermission: MicrophonePermission = .granted,
+        permissionRequested: XCTestExpectation? = nil
     ) {
         self.permission = permission
         self.requestedPermission = requestedPermission
+        self.permissionRequested = permissionRequested
         recordingURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("speech-view-model-\(UUID().uuidString)")
             .appendingPathExtension("wav")
@@ -246,8 +403,23 @@ private final class MockAudioRecorder: AudioRecording {
 
     func requestPermission() async -> MicrophonePermission {
         permissionRequestCount += 1
+        if let permissionRequested {
+            permission = await withCheckedContinuation { continuation in
+                permissionContinuation = continuation
+                permissionRequested.fulfill()
+            }
+            return permission
+        }
         permission = requestedPermission
         return requestedPermission
+    }
+
+    func completePermission(with permission: MicrophonePermission) {
+        guard let permissionContinuation else {
+            preconditionFailure("No permission request is waiting for completion")
+        }
+        self.permissionContinuation = nil
+        permissionContinuation.resume(returning: permission)
     }
 
     func startRecording() throws -> URL {
@@ -368,5 +540,39 @@ private final class MockAudioPlayer: AudioPlaying {
 
     func stop() {
         stopCount += 1
+    }
+}
+
+private final class ControlledAudioSpeechAPIClient: SpeechAPIClientProtocol {
+    private let response: SpeechTranslateResponse
+    private let audioStarted: XCTestExpectation
+    private var audioContinuation: CheckedContinuation<Data, Error>?
+
+    init(response: SpeechTranslateResponse, audioStarted: XCTestExpectation) {
+        self.response = response
+        self.audioStarted = audioStarted
+    }
+
+    func translateSpeech(
+        audioFileURL: URL,
+        direction: TranslationDirection,
+        speakOutput: Bool
+    ) async throws -> SpeechTranslateResponse {
+        response
+    }
+
+    func fetchGeneratedAudio(at audioURL: String) async throws -> Data {
+        try await withCheckedThrowingContinuation { continuation in
+            audioContinuation = continuation
+            audioStarted.fulfill()
+        }
+    }
+
+    func completeAudio(with data: Data) {
+        guard let audioContinuation else {
+            preconditionFailure("No audio download is waiting for completion")
+        }
+        self.audioContinuation = nil
+        audioContinuation.resume(returning: data)
     }
 }
