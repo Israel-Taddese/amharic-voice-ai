@@ -161,9 +161,12 @@ final class SpeechAPIClientTests: XCTestCase {
     }
 
     private func makeClient(session: HTTPSession) -> APIClient {
-        APIClient(
+        let consent = ProcessingConsentStore()
+        consent.grant()
+        return APIClient(
             configuration: BackendConfiguration(baseURL: baseURL),
-            session: session
+            session: session,
+            consent: consent
         )
     }
 

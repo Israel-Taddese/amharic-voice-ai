@@ -27,6 +27,7 @@ final class TranslationViewModel: ObservableObject {
 
     private let apiClient: APIClientProtocol
     private var translationGeneration = 0
+    private var translationTask: Task<TextTranslateResponse, Error>?
 
     init(apiClient: APIClientProtocol = APIClient()) {
         self.apiClient = apiClient
@@ -57,10 +58,12 @@ final class TranslationViewModel: ObservableObject {
 
         let requestGeneration = translationGeneration
         translationState = .loading
+        let request = TextTranslateRequest(text: text, direction: direction)
+        let task = Task { try await apiClient.translateText(request) }
+        translationTask = task
 
         do {
-            let request = TextTranslateRequest(text: text, direction: direction)
-            let response = try await apiClient.translateText(request)
+            let response = try await task.value
             guard requestGeneration == translationGeneration else { return }
             translationState = .success(response)
         } catch is CancellationError {
@@ -70,14 +73,25 @@ final class TranslationViewModel: ObservableObject {
             guard requestGeneration == translationGeneration else { return }
             translationState = .error(error.localizedDescription)
         }
+
+        if requestGeneration == translationGeneration {
+            translationTask = nil
+        }
     }
 
     func clearTranslation() {
         invalidateTranslation()
     }
 
+    func clearPrivateData() {
+        invalidateTranslation()
+        inputText = ""
+    }
+
     private func invalidateTranslation() {
         translationGeneration &+= 1
+        translationTask?.cancel()
+        translationTask = nil
         translationState = .idle
     }
 }

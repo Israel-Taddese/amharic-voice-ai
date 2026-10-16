@@ -13,16 +13,25 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var viewModel: TranslationViewModel
     @StateObject private var speechViewModel: SpeechTranslationViewModel
+    @StateObject private var processingConsent: PrivacyConsentViewModel
     @State private var translationMode: TranslationMode = .text
+    @State private var showsPrivacy = false
     private let checksHealthOnAppear: Bool
 
     init(
         viewModel: TranslationViewModel? = nil,
         speechViewModel: SpeechTranslationViewModel? = nil,
+        processingConsent: PrivacyConsentViewModel? = nil,
         checksHealthOnAppear: Bool = true
     ) {
-        _viewModel = StateObject(wrappedValue: viewModel ?? TranslationViewModel())
-        _speechViewModel = StateObject(wrappedValue: speechViewModel ?? SpeechTranslationViewModel())
+        let privacy = processingConsent ?? PrivacyConsentViewModel()
+        let apiClient = APIClient(consent: privacy.store)
+        _processingConsent = StateObject(wrappedValue: privacy)
+        _viewModel = StateObject(wrappedValue: viewModel ?? TranslationViewModel(apiClient: apiClient))
+        _speechViewModel = StateObject(wrappedValue: speechViewModel ?? SpeechTranslationViewModel(
+            apiClient: apiClient,
+            consent: privacy.store
+        ))
         self.checksHealthOnAppear = checksHealthOnAppear
     }
 
@@ -31,6 +40,13 @@ struct ContentView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     healthStatus
+                    if !processingConsent.isGranted {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("Translation processing is off", systemImage: "hand.raised.fill")
+                                .font(.subheadline)
+                            Button("Review privacy choices") { showsPrivacy = true }
+                        }
+                    }
                     translationModePicker
 
                     if translationMode == .text {
@@ -45,6 +61,17 @@ struct ContentView: View {
                 .padding()
             }
             .navigationTitle("AmharicVoice AI")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showsPrivacy = true } label: {
+                        Label("Privacy", systemImage: "hand.raised")
+                    }
+                    .accessibilityLabel("Privacy policy and processing permission")
+                }
+            }
+            .sheet(isPresented: $showsPrivacy) {
+                PrivacyView(consent: processingConsent, onWithdraw: withdrawProcessingPermission)
+            }
             .task {
                 guard checksHealthOnAppear else { return }
                 await viewModel.checkHealth()
@@ -184,6 +211,10 @@ struct ContentView: View {
                 }
 
                 Button {
+                    guard processingConsent.isGranted else {
+                        showsPrivacy = true
+                        return
+                    }
                     Task { await speechViewModel.uploadRecording() }
                 } label: {
                     Text("Translate recording")
@@ -258,6 +289,10 @@ struct ContentView: View {
 
             if response.audioURL != nil {
                 Button {
+                    guard processingConsent.isGranted else {
+                        showsPrivacy = true
+                        return
+                    }
                     Task { await speechViewModel.playTranslatedAudio() }
                 } label: {
                     HStack {
@@ -290,6 +325,10 @@ struct ContentView: View {
 
     private func startRecordingButton(title: String) -> some View {
         Button {
+            guard processingConsent.isGranted else {
+                showsPrivacy = true
+                return
+            }
             Task { await speechViewModel.startRecording() }
         } label: {
             Label(title, systemImage: "mic.fill")
@@ -337,6 +376,10 @@ struct ContentView: View {
 
     private var translateButton: some View {
         Button {
+            guard processingConsent.isGranted else {
+                showsPrivacy = true
+                return
+            }
             Task { await viewModel.translate() }
         } label: {
             HStack {
@@ -456,6 +499,12 @@ struct ContentView: View {
     private var formattedRecordingDuration: String {
         let totalSeconds = max(0, Int(speechViewModel.recordingDuration.rounded(.down)))
         return String(format: "%02d:%02d", totalSeconds / 60, totalSeconds % 60)
+    }
+
+    private func withdrawProcessingPermission() {
+        processingConsent.withdraw()
+        viewModel.clearPrivateData()
+        speechViewModel.reset()
     }
 
     private var accessibleRecordingDuration: String {

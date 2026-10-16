@@ -103,6 +103,23 @@ final class TranslationViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.translationState, .error("Backend unavailable"))
     }
 
+    func testClearingPrivateDataCancelsTranslationAndDiscardsLateResponse() async {
+        let translationStarted = expectation(description: "Translation request started")
+        let client = ControlledTranslationAPIClient(translationStarted: translationStarted)
+        let viewModel = TranslationViewModel(apiClient: client)
+        viewModel.inputText = "ሰላም"
+
+        let translation = Task { await viewModel.translate() }
+        await fulfillment(of: [translationStarted], timeout: 1)
+        viewModel.clearPrivateData()
+        client.completeTranslation(with: .success(makeTranslationResponse()))
+        await translation.value
+
+        XCTAssertEqual(viewModel.inputText, "")
+        XCTAssertEqual(viewModel.translationState, .idle)
+        XCTAssertTrue(client.wasCancelledBeforeCompletion)
+    }
+
     func testTranslationCancellationReturnsToIdle() async {
         let client = MockAPIClient(translationResult: .failure(CancellationError()))
         let viewModel = TranslationViewModel(apiClient: client)
@@ -197,6 +214,7 @@ private final class ControlledTranslationAPIClient: APIClientProtocol {
     private let translationStarted: XCTestExpectation
     private var translationContinuation: CheckedContinuation<TextTranslateResponse, Error>?
     private(set) var translationRequests: [TextTranslateRequest] = []
+    private(set) var wasCancelledBeforeCompletion = false
 
     init(translationStarted: XCTestExpectation) {
         self.translationStarted = translationStarted
@@ -208,10 +226,12 @@ private final class ControlledTranslationAPIClient: APIClientProtocol {
 
     func translateText(_ request: TextTranslateRequest) async throws -> TextTranslateResponse {
         translationRequests.append(request)
-        return try await withCheckedThrowingContinuation { continuation in
+        let response: TextTranslateResponse = try await withCheckedThrowingContinuation { continuation in
             translationContinuation = continuation
             translationStarted.fulfill()
         }
+        wasCancelledBeforeCompletion = Task.isCancelled
+        return response
     }
 
     func completeTranslation(with result: Result<TextTranslateResponse, Error>) {
