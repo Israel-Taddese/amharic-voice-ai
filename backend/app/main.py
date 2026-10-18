@@ -291,7 +291,7 @@ def text_translate(payload: TextTranslateRequest) -> TextTranslateResponse:
         )
 
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Text translation failed. Please try again.") from exc
 
 
 @app.post(
@@ -385,7 +385,7 @@ async def speech_translate(
                 ),
             ) from exc
 
-        raise HTTPException(status_code=500, detail=error_message) from exc
+        raise HTTPException(status_code=500, detail="Speech translation failed. Please try again.") from exc
 
     finally:
         with cleanup_lock:
