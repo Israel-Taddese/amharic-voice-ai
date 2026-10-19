@@ -103,9 +103,9 @@ def test_health_remains_responsive_during_blocking_speech_work(
 @pytest.mark.parametrize(
     ("recognition_result", "status", "message"),
     [
-        (RuntimeError("controlled provider failure"), 500, "controlled provider failure"),
+        (RuntimeError("controlled provider failure"), 500, "Speech translation failed. Please try again."),
         (RuntimeError("SPXERR_INVALID_HEADER"), 400, "Invalid WAV audio"),
-        ("", 500, "No transcript returned"),
+        ("", 500, "Speech translation failed. Please try again."),
     ],
 )
 def test_worker_failures_preserve_errors_and_remove_upload(
